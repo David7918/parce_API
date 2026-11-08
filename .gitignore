@@ -1,0 +1,59 @@
+# ── Secrets & environment ──────────────────────────────────────────────────
+.env
+*.env
+.env.*
+!.env.example
+
+# ── Python ─────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+
+# ── Virtual environments ────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+.Python
+
+# ── Testing ─────────────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+.tox/
+
+# ── Type checking ────────────────────────────────────────────────────────────
+.mypy_cache/
+.dmypy.json
+
+# ── IDEs ────────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ── OS ──────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Project outputs ──────────────────────────────────────────────────────────
+# (Jobs state file and parsed output are runtime artefacts, not source code)
+jobs.json
+output/
