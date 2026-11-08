@@ -96,7 +96,7 @@ def run_resume_job(
     record = job_manager.get_job(job_id)
     output_path = Path(record["output_path"])
 
-    if record["status"] == "SUCCESS" and output_path.exists():
+    if record["status"] == "COMPLETED" and output_path.exists():
         print(
             f"Job {job_id} already completed. Output at: {output_path}"
         )
@@ -115,7 +115,7 @@ def _finish_job(
     """Poll a job and, on success, download and save the Markdown."""
     final_status = job_manager.poll_until_done(job_id, client)
 
-    if final_status != "SUCCESS":
+    if final_status != "COMPLETED":
         # Status already saved by poll_until_done — job info is not lost.
         raise SystemExit(
             f"Error: job {job_id} ended with status '{final_status}'.\n"
@@ -126,7 +126,7 @@ def _finish_job(
     markdown = client.get_markdown(job_id)
 
     save_markdown(markdown, output_path)
-    job_manager.update_status(job_id, "SUCCESS")
+    job_manager.update_status(job_id, "COMPLETED")
     print("Done.")
 
 

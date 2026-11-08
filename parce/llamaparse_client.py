@@ -6,6 +6,8 @@ Responsibilities:
   - Create a parsing job and return a job ID.
   - Fetch the current status of a job.
   - Retrieve the completed Markdown result.
+
+Verified against llama-cloud 2.19.0.
 """
 
 from __future__ import annotations
@@ -14,13 +16,21 @@ from pathlib import Path
 
 from llama_cloud import LlamaCloud
 
+# Tier controls quality vs. cost. "cost_effective" is a reasonable default
+# for large D&D PDFs that contain tables and mixed layouts.
+_DEFAULT_TIER = "cost_effective"
+_DEFAULT_VERSION = "latest"
+
+# Terminal job statuses — stop polling when any of these appear.
+# Source: ParsingGetResponse.job.status Literal annotation.
+TERMINAL_STATUSES = {"COMPLETED", "FAILED", "CANCELLED"}
+
 
 class LlamaParseClient:
     """Wraps the LlamaCloud SDK for PDF parsing operations."""
 
     def __init__(self, api_key: str) -> None:
-        # The SDK accepts the key directly; it does not need to come from env.
-        self._client = LlamaCloud(token=api_key)
+        self._client = LlamaCloud(api_key=api_key)
 
     # ------------------------------------------------------------------
     # Upload
@@ -31,7 +41,7 @@ class LlamaParseClient:
         Upload a PDF to LlamaCloud.
 
         Args:
-            pdf_path: Absolute or relative path to the PDF file.
+            pdf_path: Path to the PDF file (must exist).
 
         Returns:
             The file ID assigned by LlamaCloud.
@@ -43,8 +53,9 @@ class LlamaParseClient:
             raise FileNotFoundError(f"PDF not found: {pdf_path}")
 
         with pdf_path.open("rb") as fh:
-            file_obj = self._client.files.upload_file(
-                upload_file=(pdf_path.name, fh, "application/pdf"),
+            file_obj = self._client.files.create(
+                file=(pdf_path.name, fh, "application/pdf"),
+                purpose="parse",
             )
 
         return file_obj.id
@@ -63,9 +74,10 @@ class LlamaParseClient:
         Returns:
             The job ID assigned by LlamaCloud.
         """
-        job = self._client.parsing.create_job(
+        job = self._client.parsing.create(
             file_id=file_id,
-            language=["en"],
+            tier=_DEFAULT_TIER,
+            version=_DEFAULT_VERSION,
         )
         return job.id
 
@@ -73,10 +85,10 @@ class LlamaParseClient:
         """
         Return the current status string for a job.
 
-        Possible values include: PENDING, SUCCESS, ERROR, CANCELLED.
+        Possible values: PENDING, RUNNING, COMPLETED, FAILED, CANCELLED.
         """
-        job = self._client.parsing.get_job(job_id)
-        return job.status.value
+        response = self._client.parsing.get(job_id)
+        return response.job.status
 
     # ------------------------------------------------------------------
     # Result retrieval
@@ -85,6 +97,9 @@ class LlamaParseClient:
     def get_markdown(self, job_id: str) -> str:
         """
         Retrieve the full Markdown output for a completed job.
+
+        Fetches the job with expand=["markdown"] so the Markdown content
+        is returned inline rather than as a presigned URL.
 
         Args:
             job_id: The job ID of a successfully completed job.
@@ -95,12 +110,31 @@ class LlamaParseClient:
         Raises:
             RuntimeError: if no Markdown result is available.
         """
-        result = self._client.parsing.get_job_result_markdown(job_id)
+        response = self._client.parsing.get(job_id, expand=["markdown"])
 
-        pages = getattr(result, "pages", None)
-        if not pages:
+        md = response.markdown
+        if not md or not md.pages:
             raise RuntimeError(
-                f"No Markdown pages returned for job {job_id}."
+                f"No Markdown pages returned for job {job_id}. "
+                "The job may not have completed successfully."
             )
 
-        return "\n\n".join(page.md for page in pages)
+        # Each page is either a MarkdownPageMarkdownResultPage (has .markdown)
+        # or a MarkdownPageFailedMarkdownPage (has .error). Collect only
+        # successful pages and warn about failures.
+        parts: list[str] = []
+        for page in md.pages:
+            if page.success:
+                parts.append(page.markdown)
+            else:
+                print(
+                    f"  Warning: page {page.page_number} failed to parse: "
+                    f"{getattr(page, 'error', 'unknown error')}"
+                )
+
+        if not parts:
+            raise RuntimeError(
+                f"All pages failed to parse for job {job_id}."
+            )
+
+        return "\n\n".join(parts)

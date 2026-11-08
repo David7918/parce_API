@@ -32,7 +32,8 @@ if TYPE_CHECKING:
 POLL_INTERVAL = 10
 
 # Terminal statuses — stop polling when any of these appear.
-TERMINAL_STATUSES = {"SUCCESS", "ERROR", "CANCELLED"}
+# Source: ParsingGetResponse.job.status Literal annotation in llama-cloud 2.19.0.
+TERMINAL_STATUSES = {"COMPLETED", "FAILED", "CANCELLED"}
 
 
 class JobManager:
